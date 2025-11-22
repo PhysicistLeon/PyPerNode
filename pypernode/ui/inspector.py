@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QLabel,
+    QPushButton,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -36,6 +37,10 @@ class InspectorWidget(QWidget):
         self.txt_code.setMaximumHeight(150)
         self.txt_code.textChanged.connect(self.on_code_changed)
         self.layout.addWidget(self.txt_code)
+
+        self.btn_refresh = QPushButton("Refresh Definition")
+        self.btn_refresh.clicked.connect(self.on_refresh_clicked)
+        self.layout.addWidget(self.btn_refresh)
 
         self.layout.addWidget(QLabel("Execution Result:"))
         self.txt_log = QTextEdit()
@@ -140,6 +145,12 @@ class InspectorWidget(QWidget):
     def on_code_changed(self):
         if self.current_node:
             self.current_node.code = self.txt_code.toPlainText()
+            self.current_node.refresh_definition_from_code()
+
+    def on_refresh_clicked(self):
+        if self.current_node:
+            self.current_node.refresh_definition_from_code()
+            self.set_node(self.current_node)
 
     def clear(self):
         self.current_node = None
