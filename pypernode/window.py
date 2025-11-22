@@ -132,11 +132,15 @@ class MainWindow(QMainWindow):
     def revalidate_connections(self):
         logical_conns = []
         for c in self.connections:
+            start_parent = c['start'].parentItem()
+            end_parent = c['end'].parentItem()
+            if not start_parent or not end_parent:
+                continue
             logical_conns.append(
                 {
-                    'start_node': c['start'].parentItem().node_data.id,
+                    'start_node': start_parent.node_data.id,
                     'start_socket': c['start'].index,
-                    'end_node': c['end'].parentItem().node_data.id,
+                    'end_node': end_parent.node_data.id,
                     'end_socket': c['end'].index,
                 }
             )
@@ -192,22 +196,29 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Refresh Failed", "Unable to parse the updated node definition.")
             return
 
-        for n in self.nodes.values():
-            if n.definition.name == old_type:
-                n.definition = new_def
-                n.type = new_def.name
-                n.input_defs = new_def.inputs
-                n.output_defs = new_def.outputs
-                n.inputs = [i.name for i in n.input_defs]
-                n.outputs = [o.name for o in n.output_defs]
-                for sock in n.input_defs:
-                    n.params.setdefault(sock.name, sock.default)
+        NodeLibrary.register_from_code(node.code)
 
-                item = self.find_item(n.id)
-                if item:
-                    item.node_data = n
-                    item.refresh_from_node_data()
+        if new_def.name == old_type:
+            targets = [n for n in self.nodes.values() if n.definition.name == old_type]
+        else:
+            targets = [node]
 
+        for n in targets:
+            n.definition = new_def
+            n.type = new_def.name
+            n.input_defs = new_def.inputs
+            n.output_defs = new_def.outputs
+            n.inputs = [i.name for i in n.input_defs]
+            n.outputs = [o.name for o in n.output_defs]
+            for sock in n.input_defs:
+                n.params.setdefault(sock.name, sock.default)
+
+            item = self.find_item(n.id)
+            if item:
+                item.node_data = n
+                item.refresh_from_node_data()
+
+        self.refresh_palette()
         self.revalidate_connections()
         self.inspector.set_node(node)
 
