@@ -1,13 +1,12 @@
-from .registry import NodeRegistry, register_default_nodes
+from .library import NodeLibrary
 from .models import NodeData
 from .execution import ExecutionWorker, WorkerSignals
 from .window import MainWindow
 
-register_default_nodes()
+NodeLibrary.register_default_nodes()
 
 __all__ = [
-    'NodeRegistry',
-    'register_default_nodes',
+    'NodeLibrary',
     'NodeData',
     'ExecutionWorker',
     'WorkerSignals',

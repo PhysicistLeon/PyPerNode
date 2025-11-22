@@ -75,6 +75,7 @@ class NodeView(QGraphicsView):
                     s1, s2 = self.scene().drag_start, item
                     start = s1 if s1.is_output else s2
                     end = s2 if s1.is_output else s1
-                    self.master.create_connection(start, end)
+                    if start.value_type.is_compatible_with(end.value_type):
+                        self.master.create_connection(start, end)
             self.setDragMode(QGraphicsView.ScrollHandDrag)
         super().mouseReleaseEvent(event)

@@ -1,5 +1,20 @@
 import json
-from PyQt5.QtWidgets import QFormLayout, QLabel, QLineEdit, QTextEdit, QVBoxLayout, QWidget
+from datetime import date
+from typing import Any
+
+from PyQt5.QtCore import QDate
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QDateEdit,
+    QDoubleSpinBox,
+    QFormLayout,
+    QLabel,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ..node_types import ValueType
 
 
 class InspectorWidget(QWidget):
@@ -30,6 +45,35 @@ class InspectorWidget(QWidget):
 
         self.layout.addStretch()
 
+    def _create_editor(self, value_type: ValueType, value: Any):
+        if value_type == ValueType.NUMBER:
+            spin = QDoubleSpinBox()
+            spin.setRange(-1e9, 1e9)
+            spin.setDecimals(4)
+            spin.setValue(float(value) if value is not None else 0.0)
+            return spin, spin.setValue
+        if value_type == ValueType.STRING:
+            te = QTextEdit()
+            te.setPlainText("" if value is None else str(value))
+            te.setFixedHeight(60)
+            return te, te.setPlainText
+        if value_type == ValueType.BOOLEAN:
+            cb = QCheckBox()
+            cb.setChecked(bool(value))
+            return cb, cb.setChecked
+        if value_type == ValueType.DATE:
+            de = QDateEdit()
+            de.setCalendarPopup(True)
+            if isinstance(value, date):
+                de.setDate(QDate(value.year, value.month, value.day))
+            else:
+                de.setDate(QDate.currentDate())
+            return de, de.setDate
+
+        te = QTextEdit()
+        te.setPlainText("" if value is None else str(value))
+        return te, te.setPlainText
+
     def set_node(self, node_data):
         self.current_node = node_data
         self.lbl_type.setText(f"{node_data.type} ({node_data.id[-4:]})")
@@ -39,10 +83,20 @@ class InspectorWidget(QWidget):
             if child.widget():
                 child.widget().deleteLater()
 
-        for k, v in node_data.params.items():
-            le = QLineEdit(str(v))
-            le.textChanged.connect(lambda val, key=k: self.on_param_changed(key, val))
-            self.form_layout.addRow(k, le)
+        for sock in node_data.input_defs:
+            widget, _ = self._create_editor(sock.type, node_data.params.get(sock.name, sock.default))
+            widget.setToolTip(f"{sock.name}: {sock.type.value}")
+            if hasattr(widget, 'valueChanged'):
+                widget.valueChanged.connect(lambda val, key=sock.name: self.on_param_changed(key, val))
+            elif isinstance(widget, QTextEdit):
+                widget.textChanged.connect(lambda key=sock.name, w=widget: self.on_param_changed(key, w.toPlainText()))
+            elif isinstance(widget, QCheckBox):
+                widget.stateChanged.connect(lambda state, key=sock.name: self.on_param_changed(key, bool(state)))
+            elif isinstance(widget, QDateEdit):
+                widget.dateChanged.connect(
+                    lambda d, key=sock.name: self.on_param_changed(key, d.toPyDate())
+                )
+            self.form_layout.addRow(sock.name, widget)
 
         self.txt_code.blockSignals(True)
         self.txt_code.setPlainText(node_data.code)
@@ -53,20 +107,35 @@ class InspectorWidget(QWidget):
             self.txt_log.setPlainText(node_data.last_error)
         elif node_data.last_output:
             self.txt_log.setStyleSheet("color: #55FF55;")
-            self.txt_log.setPlainText(json.dumps(node_data.last_output, indent=2))
+            self.txt_log.setPlainText(json.dumps(node_data.last_output, indent=2, default=str))
         else:
             self.txt_log.setStyleSheet("color: #AAA;")
             self.txt_log.setPlainText("Not executed yet.")
 
     def on_param_changed(self, key, val):
-        if self.current_node:
-            try:
-                if '.' in val:
-                    self.current_node.params[key] = float(val)
-                else:
-                    self.current_node.params[key] = int(val)
-            except Exception:
-                self.current_node.params[key] = val
+        if not self.current_node:
+            return
+
+        target_type = ValueType.ANY
+        for sock in self.current_node.input_defs:
+            if sock.name == key:
+                target_type = sock.type
+                break
+
+        try:
+            if target_type == ValueType.NUMBER:
+                self.current_node.params[key] = float(val)
+            elif target_type == ValueType.BOOLEAN:
+                self.current_node.params[key] = bool(val)
+            elif target_type == ValueType.DATE:
+                if isinstance(val, date):
+                    self.current_node.params[key] = val
+                elif isinstance(val, QDate):
+                    self.current_node.params[key] = val.toPyDate()
+            else:
+                self.current_node.params[key] = str(val)
+        except Exception:
+            self.current_node.params[key] = val
 
     def on_code_changed(self):
         if self.current_node:

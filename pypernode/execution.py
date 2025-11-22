@@ -60,12 +60,13 @@ class ExecutionWorker(QRunnable):
                 self.signals.node_started.emit(nid)
 
                 node_inputs = {}
-                for in_name in node.inputs:
+                for socket in node.input_defs:
+                    in_name = socket.name
                     if in_name in input_map[nid]:
                         src_id, src_pin = input_map[nid][in_name]
-                        node_inputs[in_name] = results_cache.get(src_id, {}).get(src_pin, 0.0)
+                        node_inputs[in_name] = results_cache.get(src_id, {}).get(src_pin, socket.type.default_value())
                     else:
-                        node_inputs[in_name] = 0.0
+                        node_inputs[in_name] = node.params.get(in_name, socket.default)
 
                 cur_hash = node.compute_hash(node_inputs)
                 if node.cache_hash == cur_hash and not node.last_error and node.last_output:
