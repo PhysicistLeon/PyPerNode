@@ -65,6 +65,7 @@ class MainWindow(QMainWindow):
         tb.addAction("Export Python", self.export_python)
         tb.addSeparator()
         tb.addAction("Clear", self.clear_graph)
+        tb.addAction("Delete Selected", self.delete_selected_nodes)
 
         self.threadpool = QThreadPool()
 
@@ -135,6 +136,27 @@ class MainWindow(QMainWindow):
         self.nodes = {}
         self.connections = []
         self.inspector.clear()
+
+    def delete_selected_nodes(self):
+        selected = [i for i in self.scene.selectedItems() if isinstance(i, QNodeItem)]
+        for item in selected:
+            self._delete_node_item(item)
+
+    def _delete_node_item(self, item: QNodeItem):
+        conns_to_remove = []
+        for c in self.connections:
+            if c['start'].parentItem() == item or c['end'].parentItem() == item:
+                self.scene.removeItem(c['item'])
+                conns_to_remove.append(c)
+
+        for c in conns_to_remove:
+            self.connections.remove(c)
+
+        nid = item.node_data.id
+        self.scene.removeItem(item)
+        self.nodes.pop(nid, None)
+        if self.inspector.current_node and self.inspector.current_node.id == nid:
+            self.inspector.clear()
 
     def save_json(self):
         path, _ = QFileDialog.getSaveFileName(self, "Save", "", "JSON (*.json)")

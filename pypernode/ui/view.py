@@ -35,6 +35,13 @@ class NodeView(QGraphicsView):
             self.master.create_node(node_type, pos.x(), pos.y())
             event.acceptProposedAction()
 
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            self.master.delete_selected_nodes()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
     def mousePressEvent(self, event):
         item = self.itemAt(event.pos())
         if not isinstance(item, (QNodeItem, QGraphicsProxyWidget)):
