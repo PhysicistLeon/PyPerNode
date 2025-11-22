@@ -1,6 +1,6 @@
 from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QColor, QPainter, QPainterPath, QPen
-from PyQt5.QtWidgets import QGraphicsItem, QGraphicsProxyWidget, QLineEdit, QTextEdit
+from PyQt5.QtWidgets import QGraphicsItem, QGraphicsProxyWidget, QTextEdit
 
 from ..models import NodeData
 from .sockets import QNodeSocket
@@ -28,15 +28,15 @@ class QNodeItem(QGraphicsItem):
     def _init_sockets(self):
         self.sockets = {'in': [], 'out': []}
         y = 40
-        for i, n in enumerate(self.node_data.inputs):
-            s = QNodeSocket(self, n, i, False)
+        for i, sock in enumerate(self.node_data.input_defs):
+            s = QNodeSocket(self, sock.name, i, False, sock.type)
             s.setPos(0, y)
             self.sockets['in'].append(s)
             y += 22
 
         y = 40
-        for i, n in enumerate(self.node_data.outputs):
-            s = QNodeSocket(self, n, i, True)
+        for i, sock in enumerate(self.node_data.output_defs):
+            s = QNodeSocket(self, sock.name, i, True, sock.type)
             s.setPos(self.width, y)
             self.sockets['out'].append(s)
             y += 22
@@ -44,15 +44,6 @@ class QNodeItem(QGraphicsItem):
         self.base_height = max(80, y + 10)
 
     def _init_ui(self):
-        if self.node_data.type == 'Constant':
-            le = QLineEdit(str(self.node_data.params.get('value', 0.0)))
-            le.setFixedWidth(60)
-            le.setStyleSheet("QLineEdit { background: #222; color: white; border: 1px solid #555; }")
-            le.textChanged.connect(self._on_param_changed)
-            proxy = QGraphicsProxyWidget(self)
-            proxy.setWidget(le)
-            proxy.setPos(50, 38)
-
         te = QTextEdit(self.node_data.code)
         te.setStyleSheet("QTextEdit { background: #1e1e1e; color: #ddd; font-family: Consolas; border: 1px solid #444; }")
         te.setMinimumSize(160, 100)
@@ -61,13 +52,6 @@ class QNodeItem(QGraphicsItem):
         self.code_proxy.setWidget(te)
         self.code_proxy.setPos(10, self.base_height + 5)
         self.code_proxy.hide()
-
-    def _on_param_changed(self, txt):
-        try:
-            self.node_data.params['value'] = float(txt)
-        except Exception:
-            pass
-        self.master.inspector_refresh_needed.emit()
 
     def _on_code_changed(self):
         self.node_data.code = self.code_proxy.widget().toPlainText()

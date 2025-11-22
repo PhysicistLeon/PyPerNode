@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from PyQt5.QtCore import QThreadPool, pyqtSignal
 from PyQt5.QtGui import QColor, QPainterPath, QPen
 from PyQt5.QtWidgets import (
@@ -12,8 +13,10 @@ from PyQt5.QtWidgets import (
 )
 
 from .execution import ExecutionWorker
+from .interpreter import parse_function
+from .library import NodeLibrary
 from .models import NodeData
-from .registry import NodeRegistry
+from .node_types import ValueType
 from .ui.connection_item import ConnectionItem
 from .ui.inspector import InspectorWidget
 from .ui.node_item import QNodeItem
@@ -37,8 +40,8 @@ class MainWindow(QMainWindow):
         self.view = NodeView(self.scene, self)
 
         self.palette = NodePalette()
-        for t in NodeRegistry.get_all_types():
-            self.palette.addItem(t)
+        for definition in NodeLibrary.get_all_definitions():
+            self.palette.addItem(definition.name)
 
         self.inspector = InspectorWidget()
         self.inspector_refresh_needed.connect(
@@ -70,11 +73,42 @@ class MainWindow(QMainWindow):
         self.threadpool = QThreadPool()
 
     def create_node(self, type_name, x, y, id=None, params=None, code=None):
-        node = NodeData(type_name, x, y, id)
+        definition = None
+        if code:
+            try:
+                definition = parse_function(code)
+            except Exception:
+                pass
+
+        if definition is None:
+            definition = NodeLibrary.get_definition(type_name)
+
+        if definition is None:
+            QMessageBox.warning(self, "Unknown node", f"No node definition found for {type_name}")
+            return None
+
+        node = NodeData(definition, x, y, id)
         if params:
-            node.params = params
+            node.params.update(params)
         if code:
             node.code = code
+            node.refresh_definition_from_code()
+
+        for sock in node.input_defs:
+            val = node.params.get(sock.name)
+            if sock.type == ValueType.NUMBER and isinstance(val, str):
+                try:
+                    node.params[sock.name] = float(val)
+                except Exception:
+                    pass
+            elif sock.type == ValueType.BOOLEAN and isinstance(val, str):
+                node.params[sock.name] = val.lower() in ("true", "1", "yes")
+            elif sock.type == ValueType.DATE and isinstance(val, str):
+                try:
+                    node.params[sock.name] = date.fromisoformat(val)
+                except Exception:
+                    pass
+
         self.nodes[node.id] = node
 
         item = QNodeItem(node, self)
@@ -185,7 +219,7 @@ class MainWindow(QMainWindow):
 
             data["nodes"].append({
                 "id": n.id, "type": n.type, "x": n.x, "y": n.y,
-                "params": n.params, "code": n.code,
+                "params": {k: (v.isoformat() if isinstance(v, date) else v) for k, v in n.params.items()}, "code": n.code,
             })
 
         with open(path, 'w') as f:
@@ -246,25 +280,26 @@ class MainWindow(QMainWindow):
             script += f"    params = {node.params}\n"
 
             input_dict_str = "{"
-            for i, inp_name in enumerate(node.inputs):
+            for i, sock in enumerate(node.input_defs):
                 src = "0.0"
                 for c in conns:
                     if c['end_node'] == nid and c['end_socket'] == i:
                         s_node = self.nodes[c['start_node']]
                         s_out = s_node.outputs[c['start_socket']]
                         src = f"results.get('{c['start_node']}', {{}}).get('{s_out}', 0.0)"
-                input_dict_str += f"'{inp_name}': {src}, "
+                input_dict_str += f"'{sock.name}': {src}, "
             input_dict_str += "}"
 
             script += f"    inputs = {input_dict_str}\n"
-            script += "    outputs = {}\n"
-
-            code_lines = node.code.split('\n')
-            for line in code_lines:
-                script += f"    {line}\n"
-
-            script += f"    results['{nid}'] = outputs\n"
-            script += f"    print(f'Node {nid} Result: {{outputs}}')\n"
+            escaped_code = node.code.replace('"""', '\"\"\"')
+            script += f"    namespace = {{}}\n"
+            script += f"    exec(\"\"\"{escaped_code}\"\"\", namespace, namespace)\n"
+            script += f"    func = namespace.get('{node.definition.name}')\n"
+            script += "    if not callable(func):\n"
+            script += f"        raise ValueError('Function {node.definition.name} missing in exported code')\n"
+            script += "    result = func(**inputs)\n"
+            script += f"    results['{nid}'] = {{'{node.output_defs[0].name}': result}}\n"
+            script += f"    print('Node {nid} Result:', results['{nid}'])\n"
 
         script += "\nif __name__ == '__main__':\n    run_workflow()"
 
