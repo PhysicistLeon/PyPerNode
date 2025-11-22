@@ -3,9 +3,9 @@ from datetime import date
 from PyQt5.QtCore import QThreadPool, pyqtSignal
 from PyQt5.QtGui import QColor, QPainterPath, QPen
 from PyQt5.QtWidgets import (
+    QFileDialog,
     QGraphicsScene,
     QHBoxLayout,
-    QFileDialog,
     QMainWindow,
     QMessageBox,
     QSplitter,
@@ -40,8 +40,7 @@ class MainWindow(QMainWindow):
         self.view = NodeView(self.scene, self)
 
         self.palette = NodePalette()
-        for definition in NodeLibrary.get_all_definitions():
-            self.palette.addItem(definition.name)
+        self.refresh_palette()
 
         self.inspector = InspectorWidget()
         self.inspector_refresh_needed.connect(
@@ -69,8 +68,14 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         tb.addAction("Clear", self.clear_graph)
         tb.addAction("Delete Selected", self.delete_selected_nodes)
+        tb.addAction("Save Node Definition", self.save_current_node_definition)
 
         self.threadpool = QThreadPool()
+
+    def refresh_palette(self):
+        self.palette.clear()
+        for definition in NodeLibrary.get_all_definitions():
+            self.palette.addItem(definition.name)
 
     def create_node(self, type_name, x, y, id=None, params=None, code=None):
         definition = None
@@ -189,6 +194,35 @@ class MainWindow(QMainWindow):
         selected = [i for i in self.scene.selectedItems() if isinstance(i, QNodeItem)]
         for item in selected:
             self._delete_node_item(item)
+
+    def save_current_node_definition(self):
+        node = self.inspector.current_node
+        if not node:
+            QMessageBox.warning(self, "No Selection", "Select a node to save its definition.")
+            return
+
+        try:
+            definition = NodeLibrary.register_from_code(node.code)
+        except Exception as exc:
+            QMessageBox.critical(self, "Save Failed", f"Unable to parse node code: {exc}")
+            return
+
+        node.definition = definition
+        node.type = definition.name
+        node.input_defs = definition.inputs
+        node.output_defs = definition.outputs
+        node.inputs = [i.name for i in node.input_defs]
+        node.outputs = [o.name for o in node.output_defs]
+        for sock in node.input_defs:
+            node.params.setdefault(sock.name, sock.default)
+
+        self.refresh_palette()
+        self.inspector.set_node(node)
+        QMessageBox.information(
+            self,
+            "Node Saved",
+            f"Node '{definition.name}' saved to the library and palette.",
+        )
 
     def _delete_node_item(self, item: QNodeItem):
         conns_to_remove = []

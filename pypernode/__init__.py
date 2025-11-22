@@ -3,7 +3,7 @@ from .models import NodeData
 from .execution import ExecutionWorker, WorkerSignals
 from .window import MainWindow
 
-NodeLibrary.register_default_nodes()
+NodeLibrary.initialize()
 
 __all__ = [
     'NodeLibrary',
