@@ -43,6 +43,7 @@ class MainWindow(QMainWindow):
         self.refresh_palette()
 
         self.inspector = InspectorWidget()
+        self.inspector.definition_refreshed.connect(self.on_definition_refreshed)
         self.inspector_refresh_needed.connect(
             lambda: self.inspector.set_node(self.inspector.current_node) if self.inspector.current_node else None
         )
@@ -128,6 +129,38 @@ class MainWindow(QMainWindow):
         self.connections.append({'item': connection_item, 'start': start_s, 'end': end_s})
         self.update_connections()
 
+    def revalidate_connections(self):
+        logical_conns = []
+        for c in self.connections:
+            logical_conns.append(
+                {
+                    'start_node': c['start'].parentItem().node_data.id,
+                    'start_socket': c['start'].index,
+                    'end_node': c['end'].parentItem().node_data.id,
+                    'end_socket': c['end'].index,
+                }
+            )
+            if c['item'].scene():
+                self.scene.removeItem(c['item'])
+
+        self.connections = []
+
+        for conn in logical_conns:
+            s_item = self.find_item(conn['start_node'])
+            e_item = self.find_item(conn['end_node'])
+            if not s_item or not e_item:
+                continue
+            try:
+                s_sock = s_item.sockets['out'][conn['start_socket']]
+                e_sock = e_item.sockets['in'][conn['end_socket']]
+            except IndexError:
+                continue
+
+            if not s_sock.value_type.is_compatible_with(e_sock.value_type):
+                continue
+
+            self.create_connection(s_sock, e_sock)
+
     def update_connections(self):
         for c in self.connections:
             p1 = c['start'].get_scene_pos()
@@ -151,6 +184,32 @@ class MainWindow(QMainWindow):
             self.scene.removeItem(to_remove['item'])
             self.connections.remove(to_remove)
             self.inspector_refresh_needed.emit()
+
+    def on_definition_refreshed(self, node: NodeData):
+        old_type = node.definition.name
+        new_def = node.refresh_definition_from_code()
+        if not new_def:
+            QMessageBox.warning(self, "Refresh Failed", "Unable to parse the updated node definition.")
+            return
+
+        for n in self.nodes.values():
+            if n.definition.name == old_type:
+                n.definition = new_def
+                n.type = new_def.name
+                n.input_defs = new_def.inputs
+                n.output_defs = new_def.outputs
+                n.inputs = [i.name for i in n.input_defs]
+                n.outputs = [o.name for o in n.output_defs]
+                for sock in n.input_defs:
+                    n.params.setdefault(sock.name, sock.default)
+
+                item = self.find_item(n.id)
+                if item:
+                    item.node_data = n
+                    item.refresh_from_node_data()
+
+        self.revalidate_connections()
+        self.inspector.set_node(node)
 
     def get_logical_conns(self):
         conns = []

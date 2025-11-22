@@ -25,6 +25,18 @@ class QNodeItem(QGraphicsItem):
         self._init_sockets()
         self._init_ui()
 
+    def refresh_from_node_data(self):
+        self.prepareGeometryChange()
+        for sock in self.sockets.get('in', []):
+            if sock.scene():
+                sock.scene().removeItem(sock)
+        for sock in self.sockets.get('out', []):
+            if sock.scene():
+                sock.scene().removeItem(sock)
+
+        self._init_sockets()
+        self.update()
+
     def _init_sockets(self):
         self.sockets = {'in': [], 'out': []}
         y = 40
