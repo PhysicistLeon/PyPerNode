@@ -15,6 +15,7 @@ class QNodeItem(QGraphicsItem):
         self.base_height = 80
         self.radius = 8
         self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
+        self.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
         self.setAcceptHoverEvents(True)
 
         self.is_code_visible = False
@@ -144,3 +145,8 @@ class QNodeItem(QGraphicsItem):
             return
         self.master.inspector.set_node(self.node_data)
         super().mousePressEvent(event)
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemPositionHasChanged:
+            self.master.update_connections()
+        return super().itemChange(change, value)
