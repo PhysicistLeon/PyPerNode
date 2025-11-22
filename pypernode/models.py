@@ -27,20 +27,23 @@ class NodeData:
         self.last_error: Optional[str] = None
         self.cache_hash: Optional[str] = None
 
-    def refresh_definition_from_code(self) -> None:
+    def refresh_definition_from_code(self):
         try:
             new_def = parse_function(self.code)
-            self.definition = new_def
-            self.type = new_def.name
-            self.input_defs = new_def.inputs
-            self.output_defs = new_def.outputs
-            self.inputs = [i.name for i in self.input_defs]
-            self.outputs = [o.name for o in self.output_defs]
-            for sock in self.input_defs:
-                self.params.setdefault(sock.name, sock.default)
         except Exception:
             # Keep previous definition if parsing fails
-            pass
+            return None
+
+        self.definition = new_def
+        self.type = new_def.name
+        self.input_defs = new_def.inputs
+        self.output_defs = new_def.outputs
+        self.inputs = [i.name for i in self.input_defs]
+        self.outputs = [o.name for o in self.output_defs]
+        for sock in self.input_defs:
+            self.params.setdefault(sock.name, sock.default)
+
+        return new_def
 
     def compute_hash(self, input_values: Dict[str, object]) -> str:
         hasher = hashlib.sha256()

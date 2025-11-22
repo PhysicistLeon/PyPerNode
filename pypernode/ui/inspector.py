@@ -2,7 +2,7 @@ import json
 from datetime import date
 from typing import Any
 
-from PyQt5.QtCore import QDate
+from PyQt5.QtCore import QDate, pyqtSignal
 from PyQt5.QtWidgets import (
     QCheckBox,
     QDateEdit,
@@ -19,6 +19,8 @@ from ..node_types import ValueType
 
 
 class InspectorWidget(QWidget):
+    definition_refreshed = pyqtSignal(object)
+
     def __init__(self):
         super().__init__()
         self.layout = QVBoxLayout(self)
@@ -145,12 +147,10 @@ class InspectorWidget(QWidget):
     def on_code_changed(self):
         if self.current_node:
             self.current_node.code = self.txt_code.toPlainText()
-            self.current_node.refresh_definition_from_code()
 
     def on_refresh_clicked(self):
         if self.current_node:
-            self.current_node.refresh_definition_from_code()
-            self.set_node(self.current_node)
+            self.definition_refreshed.emit(self.current_node)
 
     def clear(self):
         self.current_node = None
