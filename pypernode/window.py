@@ -2,7 +2,6 @@ import json
 from PyQt5.QtCore import QThreadPool, pyqtSignal
 from PyQt5.QtGui import QColor, QPainterPath, QPen
 from PyQt5.QtWidgets import (
-    QGraphicsPathItem,
     QGraphicsScene,
     QHBoxLayout,
     QFileDialog,
@@ -15,6 +14,7 @@ from PyQt5.QtWidgets import (
 from .execution import ExecutionWorker
 from .models import NodeData
 from .registry import NodeRegistry
+from .ui.connection_item import ConnectionItem
 from .ui.inspector import InspectorWidget
 from .ui.node_item import QNodeItem
 from .ui.palette import NodePalette
@@ -83,21 +83,35 @@ class MainWindow(QMainWindow):
         return item
 
     def create_connection(self, start_s, end_s):
-        path = QGraphicsPathItem()
-        path.setPen(QPen(QColor("#AAA"), 2))
-        path.setZValue(-1)
-        self.scene.addItem(path)
-        self.connections.append({'item': path, 'start': start_s, 'end': end_s})
+        connection_item = ConnectionItem(self)
+        connection_item.setPen(QPen(QColor("#AAA"), 2))
+        self.scene.addItem(connection_item)
+        self.connections.append({'item': connection_item, 'start': start_s, 'end': end_s})
         self.update_connections()
 
     def update_connections(self):
         for c in self.connections:
             p1 = c['start'].get_scene_pos()
             p2 = c['end'].get_scene_pos()
-            path = QPainterPath(p1)
-            dx = p2.x() - p1.x()
-            path.cubicTo(p1.x() + dx * 0.5, p1.y(), p2.x() - dx * 0.5, p2.y(), p2.x(), p2.y())
-            c['item'].setPath(path)
+            if isinstance(c['item'], ConnectionItem):
+                c['item'].update_path(p1, p2)
+            else:
+                path = QPainterPath(p1)
+                dx = p2.x() - p1.x()
+                path.cubicTo(p1.x() + dx * 0.5, p1.y(), p2.x() - dx * 0.5, p2.y(), p2.x(), p2.y())
+                c['item'].setPath(path)
+
+    def remove_connection(self, connection_item: ConnectionItem):
+        to_remove = None
+        for c in self.connections:
+            if c['item'] is connection_item:
+                to_remove = c
+                break
+
+        if to_remove:
+            self.scene.removeItem(to_remove['item'])
+            self.connections.remove(to_remove)
+            self.inspector_refresh_needed.emit()
 
     def get_logical_conns(self):
         conns = []
