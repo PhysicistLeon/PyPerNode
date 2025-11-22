@@ -161,3 +161,6 @@ cython_debug/
 *.bak
 *.orig
 .vscode/settings.json
+pypernode/nodes.db
+workflows/temp.json
+workflows/temp.py
